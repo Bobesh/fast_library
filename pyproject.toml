@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "fast-library"
+version = "0.1.0"
+description = "Fast and light library API"
+authors = ["Robert Pacak <r.pacak@seznam.cz>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+fastapi = "^0.116.1"
+psycopg2 = "^2.9.10"
+uvicorn = "^0.35.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
