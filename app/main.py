@@ -12,7 +12,7 @@ from starlette.exceptions import HTTPException
 from app.core.config import settings
 from app.core.logging import initialize_logging, log_info, log_debug, log_warning
 from app.core.database import db_manager
-from app.routers import health
+from app.routers import health, books
 
 # Initialize logging first
 initialize_logging()
@@ -22,22 +22,13 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(api: FastAPI) -> AsyncGenerator[None, None]:
     # Startup
-    log_debug(logger, "Application lifespan startup initiated")
-
     log_debug(logger, "Initializing database connection pool")
-    await db_manager.initialize_pool()
-
-    log_info(logger, f"Application {settings.app_name} v{settings.version} startup completed")
+    db_manager.initialize_pool()
 
     yield
 
     # Shutdown
-    log_debug(logger, "Application lifespan shutdown initiated")
-
-    log_debug(logger, "Closing database connection pool")
-    await db_manager.close_connection_pool()
-
-    log_info(logger, "Application shutdown completed")
+    db_manager.close_connection_pool()
 
 
 app = FastAPI(
@@ -58,6 +49,7 @@ log_info(
 
 # Include routers
 app.include_router(health.router, tags=["health"])
+app.include_router(books.router, prefix="/api/books", tags=["books"])
 
 
 @app.exception_handler(HTTPException)

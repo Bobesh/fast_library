@@ -33,7 +33,11 @@ CREATE TABLE borrowings (
     copy_id INTEGER REFERENCES copies(id) ON DELETE CASCADE,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     borrowed_at DATE DEFAULT CURRENT_DATE,
-    due_date DATE NOT NULL, -- generated as borrowed_at + 1 month
+    due_date DATE NOT NULL,
     returned_at DATE NULL,   -- NULL = not returned yet
     created_at TIMESTAMP DEFAULT NOW()
 );
+
+CREATE INDEX idx_copies_book_status ON copies(book_id, status);
+CREATE INDEX idx_borrowings_returned ON borrowings(returned_at) WHERE returned_at IS NULL;
+CREATE INDEX idx_borrowings_due_date ON borrowings(due_date);

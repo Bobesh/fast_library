@@ -1,14 +1,11 @@
-import asyncio
 import logging
 from typing import Optional
 import psycopg2
 from psycopg2 import pool
-
 from app.core.config import settings
 from app.core.logging import log_debug, log_info, log_error
 
 logger = logging.getLogger(__name__)
-
 
 class DatabaseManager:
     _instance: Optional['DatabaseManager'] = None
@@ -19,7 +16,7 @@ class DatabaseManager:
             cls._instance = super(DatabaseManager, cls).__new__(cls)
         return cls._instance
 
-    async def initialize_pool(self) -> None:
+    def initialize_pool(self) -> None:
         """Initialize database connection pool"""
         if self._connection_pool is None:
             try:
@@ -34,15 +31,12 @@ class DatabaseManager:
                     password=settings.db_password()
                 )
                 log_info(logger, "Database connection pool initialized successfully")
-
-                # Test connection
-                await self._test_connection()
-
+                self._test_connection()
             except Exception as e:
                 log_error(logger, f"Failed to initialize database connection pool: {e}", exc_info=e)
                 raise
 
-    async def _test_connection(self) -> None:
+    def _test_connection(self) -> None:
         """Test database connection"""
         try:
             conn = self.get_connection()
@@ -66,7 +60,7 @@ class DatabaseManager:
         if self._connection_pool:
             self._connection_pool.putconn(connection)
 
-    async def close_connection_pool(self) -> None:
+    def close_connection_pool(self) -> None:  # ✅ Odstranil async
         """Close all connections in pool"""
         if self._connection_pool:
             log_debug(logger, "Closing database connection pool")
@@ -74,23 +68,19 @@ class DatabaseManager:
             self._connection_pool = None
             log_info(logger, "Database connection pool closed")
 
-
-# Singleton instance
-db_manager = DatabaseManager()
-
+db_manager = DatabaseManager() #singleton
 
 class DatabaseConnection:
     """Context manager for database connections"""
-
     def __init__(self):
         self.connection = None
 
-    def __enter__(self):
+    def __enter__(self):  # ✅ Sync context manager
         self.connection = db_manager.get_connection()
         return self.connection
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb):  # ✅ Sync context manager
         if self.connection:
             if exc_type:
-                self.connection.rollback()
+                self.connection.rollback()  # ✅ Auto rollback při chybě
             db_manager.return_connection(self.connection)
