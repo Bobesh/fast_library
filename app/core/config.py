@@ -1,4 +1,5 @@
 import os
+import secrets
 from typing import Optional
 
 
@@ -7,6 +8,10 @@ class Settings:
         self.app_name = "Knihovna API"
         self.version = "1.0.0"
         self.debug = os.getenv("DEBUG", "true").lower() == "true"
+
+    def api_key(self) -> str:
+        """Get API key from environment or generate one"""
+        return os.getenv("API_KEY")
 
     def db_host(self) -> str:
         return os.getenv("DB_HOST", "localhost")

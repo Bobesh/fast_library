@@ -22,8 +22,6 @@ CREATE TABLE users (
     email VARCHAR(100) UNIQUE NOT NULL,
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
-    phone VARCHAR(20),
-    active BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -41,3 +39,5 @@ CREATE TABLE borrowings (
 CREATE INDEX idx_copies_book_status ON copies(book_id, status);
 CREATE INDEX idx_borrowings_returned ON borrowings(returned_at) WHERE returned_at IS NULL;
 CREATE INDEX idx_borrowings_due_date ON borrowings(due_date);
+CREATE UNIQUE INDEX ix_users_username ON users(username);
+CREATE UNIQUE INDEX ix_users_email ON users(email);

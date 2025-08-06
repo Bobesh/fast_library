@@ -21,7 +21,6 @@ def get_library_manager() -> LibraryManager:
     psql = get_library_psql()
     return LibraryManager(psql)
 
-# FastAPI dependency
 async def library_manager_dependency() -> LibraryManager:
     """FastAPI dependency for LibraryManager"""
     return get_library_manager()

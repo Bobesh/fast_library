@@ -1,0 +1,1 @@
+ALTER TABLE copies DROP COLUMN IF EXISTS status;

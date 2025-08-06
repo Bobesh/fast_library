@@ -2,7 +2,7 @@ import logging
 from typing import List, Optional, Union
 from datetime import date
 from dataclasses import asdict
-from pydantic import BaseModel, computed_field
+from pydantic import BaseModel, computed_field, Field
 from fastapi import APIRouter, HTTPException, status, Depends
 from app.services.library_manager import LibraryManager
 from app.core.dependencies import library_manager_dependency
@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-# Pydantic Response Models s computed fields
 class CopyInfoResponse(BaseModel):
     id: int
     status: str
@@ -115,6 +114,16 @@ class BorrowedBookResponse(BaseModel):
         from datetime import date
         return (self.due_date - date.today()).days
 
+class CreateBookRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=255, description="Book title")
+    isbn: Optional[str] = Field(None, max_length=13, description="ISBN number")
+    year_published: Optional[int] = Field(None, ge=1000, le=2030, description="Publication year")
+    copies_count: int = Field(..., ge=1, le=50, description="Number of copies to create (1-50)")
+
+
+class BookCreatedResponse(BaseModel):
+    message: str
+    book: BookWithCopiesResponse
 
 class BorrowingResultResponse(BaseModel):
     borrowing_id: int
@@ -155,7 +164,7 @@ async def get_books(
         include_details: bool = False,
         library_manager: LibraryManager = Depends(library_manager_dependency)
 ):
-    """Get all books with optional detailed copy information"""
+    """Get all books"""
     log_debug(logger, f"GET /books endpoint called (include_details={include_details})")
     books = await library_manager.get_all_books(include_copy_details=include_details)
 
@@ -165,33 +174,20 @@ async def get_books(
         return convert_dataclass_list(books, BookSummaryResponse)
 
 
-@router.get("/borrowed", response_model=List[BorrowedBookResponse])
-async def get_borrowed_books(library_manager: LibraryManager = Depends(library_manager_dependency)):
-    """Get all currently borrowed books"""
-    log_debug(logger, "GET /books/borrowed endpoint called")
-    borrowed_books = await library_manager.get_borrowed_books()
-    return convert_dataclass_list(borrowed_books, BorrowedBookResponse)
-
-
 @router.get("/{book_id}", response_model=Union[BookWithCopiesResponse, BookDetailsResponse])
 async def get_book(
         book_id: int,
-        include_details: bool = False,
         library_manager: LibraryManager = Depends(library_manager_dependency)
 ):
-    """Get book details by ID with optional copy details"""
-    log_debug(logger, f"GET /books/{book_id} endpoint called (include_details={include_details})")
-    book = await library_manager.get_book_details(book_id, include_copy_details=include_details)
+    """Get book"""
+    log_debug(logger, f"GET /books/{book_id} endpoint called")
+    book = await library_manager.get_book_details(book_id)
     if not book:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Book with ID {book_id} not found"
         )
-
-    if include_details and isinstance(book, BookWithCopies):
-        return dataclass_to_pydantic(book, BookWithCopiesResponse)
-    else:
-        return dataclass_to_pydantic(book, BookDetailsResponse)
+    return dataclass_to_pydantic(book, BookDetailsResponse)
 
 
 @router.post("/copies/{copy_id}/borrow", response_model=BorrowResponse)
@@ -227,6 +223,28 @@ async def return_book(
         return ReturnResponse(
             message="Book returned successfully",
             return_details=dataclass_to_pydantic(result, ReturnResultResponse)
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+@router.post("/", response_model=BookCreatedResponse, status_code=status.HTTP_201_CREATED)
+async def create_book(
+        book_data: CreateBookRequest,
+        library_manager: LibraryManager = Depends(library_manager_dependency)
+):
+    """Create a new book with specified number of copies"""
+    log_debug(logger, f"POST /books endpoint called for title: {book_data.title}")
+    try:
+        book_dict = book_data.model_dump(exclude_none=True)
+        created_book = await library_manager.create_book(book_dict)
+
+        return BookCreatedResponse(
+            message=f"Book '{created_book.title}' created successfully with {created_book.total_copies} copies",
+            book=dataclass_to_pydantic(created_book, BookWithCopiesResponse)
         )
     except ValueError as e:
         raise HTTPException(

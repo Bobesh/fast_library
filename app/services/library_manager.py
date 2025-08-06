@@ -1,6 +1,7 @@
 import logging
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any
 from app.core.logging import log_debug, log_info, log_error
+from app.models.books import BorrowingResult, ReturnResult, BookWithCopies
 from app.services.library_psql import LibraryPsql
 
 logger = logging.getLogger(__name__)
@@ -13,36 +14,25 @@ class LibraryManager:
         self.data_access = data_access
         log_debug(logger, "LibraryManager initialized")
 
-    async def get_all_books(self, include_copy_details: bool = False):
+    async def get_all_books(self):
         """Get all books with availability information"""
-        log_debug(logger, f"LibraryManager: Getting all books (include_copy_details={include_copy_details})")
-        return await self.data_access.get_all_books_with_copies(include_copy_details)
+        log_debug(logger, f"LibraryManager: Getting all books")
+        return await self.data_access.get_all_books_with_copies()
 
-    async def get_book_details(self, book_id: int, include_copy_details: bool = False):
+    async def get_book_details(self, book_id: int):
         """Get detailed information about a specific book"""
         log_debug(logger,
-                  f"LibraryManager: Getting book details for ID {book_id} (include_copy_details={include_copy_details})")
-        return await self.data_access.get_book_by_id(book_id, include_copy_details)
+                  f"LibraryManager: Getting book details for ID {book_id}")
+        return await self.data_access.get_book_by_id(book_id)
 
-    async def get_borrowed_books(self) -> List[Dict[str, Any]]:
-        """Get all currently borrowed books"""
-        log_debug(logger, "LibraryManager: Getting borrowed books")
-        return await self.data_access.get_currently_borrowed_books()
-
-    async def borrow_book(self, book_id: int, user_id: int) -> Dict[str, Any]:
+    async def borrow_copy(self, book_id: int, user_id: int) -> BorrowingResult:
         """
         Borrow a book for a user
-        Business logic: check availability, validate user, etc.
         """
         log_info(logger, f"LibraryManager: User {user_id} attempting to borrow book {book_id}")
 
-        # Could add business logic here like:
-        # - Check if user has overdue books
-        # - Check borrowing limits
-        # - Validate user status
-
         try:
-            result = await self.data_access.borrow_book(book_id, user_id)
+            result = await self.data_access.borrow_copy(book_id, user_id)
             log_info(logger, f"LibraryManager: Successfully processed borrowing for user {user_id}")
             return result
         except ValueError as e:
@@ -52,10 +42,9 @@ class LibraryManager:
             log_error(logger, f"LibraryManager: Unexpected error during borrowing - {e}", exc_info=e)
             raise
 
-    async def return_book(self, copy_id: int) -> Dict[str, Any]:
+    async def return_book(self, copy_id: int) -> ReturnResult:
         """
         Return a book
-        Business logic: calculate fines, update history, etc.
         """
         log_info(logger, f"LibraryManager: Attempting to return copy {copy_id}")
 
@@ -68,4 +57,21 @@ class LibraryManager:
             raise
         except Exception as e:
             log_error(logger, f"LibraryManager: Unexpected error during return - {e}", exc_info=e)
+            raise
+
+    async def create_book(self, book_data: Dict[str, Any]) -> BookWithCopies:
+        """
+        Create a new book with copies
+        """
+        log_info(logger, f"LibraryManager: Creating book '{book_data.get('title')}'")
+
+        try:
+            book = await self.data_access.create_book(book_data)
+            log_info(logger, f"LibraryManager: Successfully created book '{book.title}' with ID {book.id}")
+            return book
+        except ValueError as e:
+            log_error(logger, f"LibraryManager: Failed to create book - {e}")
+            raise
+        except Exception as e:
+            log_error(logger, f"LibraryManager: Unexpected error creating book - {e}", exc_info=e)
             raise

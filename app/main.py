@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.core.logging import initialize_logging, log_info, log_debug, log_warning
 from app.core.database import db_manager
 from app.routers import health, books, users
+from app.routers.auth_middleware import APIKeyMiddleware
 
 # Initialize logging first
 initialize_logging()
@@ -46,6 +47,9 @@ log_info(
     logger,
     f"Starting {settings.app_name} version {settings.version} on {settings.app_host()}:{settings.app_port()}"
 )
+
+#include middlewares
+app.add_middleware(APIKeyMiddleware)
 
 # Include routers
 app.include_router(health.router, tags=["health"])

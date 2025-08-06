@@ -11,8 +11,6 @@ class User:
     email: str
     first_name: str
     last_name: str
-    phone: Optional[str]
-    active: bool
     created_at: date
 
     @property

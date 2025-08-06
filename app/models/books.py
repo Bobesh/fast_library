@@ -15,6 +15,7 @@ class CopyInfo:
 class BorrowedCopyInfo:
     """Information about a borrowed copy with borrowing details"""
     copy_id: int
+    book_title: str
     borrower_id: int
     borrower_first_name: str
     borrower_last_name: str
@@ -34,17 +35,29 @@ class BorrowedCopyInfo:
 
 
 @dataclass(frozen=True)
-class BookWithCopies:
-    """Book with detailed copy information"""
+class BaseBook:
     id: int
     title: str
     isbn: Optional[str]
     year_published: Optional[int]
-    total_copies: int
-    available_copies_count: int
-    borrowed_copies_count: int
+
+@dataclass(frozen=True)
+class BookWithCopies(BaseBook):
+    """Book with detailed copy information"""
     available_copies: List[CopyInfo]
     borrowed_copies: List[BorrowedCopyInfo]
+
+    @property
+    def available_copies_count(self):
+        return len(self.available_copies)
+
+    @property
+    def borrowed_copies_count(self):
+        return len(self.borrowed_copies)
+
+    @property
+    def total_copies(self):
+        return self.borrowed_copies_count + self.available_copies_count
 
     @property
     def is_available(self) -> bool:
@@ -92,28 +105,6 @@ class BookDetails:
     year_published: Optional[int]
     total_copies: int
     available_copies: int
-
-
-@dataclass(frozen=True)
-class BorrowedBook:
-    """Information about borrowed book (for borrowed books endpoint)"""
-    book_id: int
-    book_title: str
-    borrower_first_name: str
-    borrower_last_name: str
-    borrower_email: str
-    borrowed_at: date
-    due_date: date
-    copy_id: int
-    is_overdue: bool
-
-    @property
-    def borrower_full_name(self) -> str:
-        return f"{self.borrower_first_name} {self.borrower_last_name}"
-
-    @property
-    def days_until_due(self) -> int:
-        return (self.due_date - date.today()).days
 
 
 @dataclass(frozen=True)
