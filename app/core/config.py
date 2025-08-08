@@ -1,5 +1,4 @@
 import os
-import secrets
 from typing import Optional
 
 
@@ -9,8 +8,7 @@ class Settings:
         self.version = "1.0.0"
         self.debug = os.getenv("DEBUG", "true").lower() == "true"
 
-    def api_key(self) -> str:
-        """Get API key from environment or generate one"""
+    def api_key(self) -> Optional[str]:
         return os.getenv("API_KEY")
 
     def db_host(self) -> str:
@@ -20,13 +18,13 @@ class Settings:
         return int(os.getenv("DB_PORT", "5432"))
 
     def db_name(self) -> str:
-        return os.getenv("DB_NAME", "knihovna")
+        return os.getenv("DB_NAME", "library")
 
     def db_user(self) -> str:
-        return os.getenv("DB_USER", "knihovna")
+        return os.getenv("DB_USER", "library")
 
     def db_password(self) -> str:
-        return os.getenv("DB_PASSWORD", "heslo123")
+        return os.getenv("DB_PASSWORD", "secret123")
 
     def app_host(self) -> str:
         return os.getenv("APP_HOST", "0.0.0.0")

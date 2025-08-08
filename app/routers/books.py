@@ -1,13 +1,12 @@
 import logging
-from typing import List, Optional, Union
+from typing import List, Optional
 from datetime import date
 from dataclasses import asdict
 from pydantic import BaseModel, computed_field, Field
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Header
 from app.services.library_manager import LibraryManager
 from app.core.dependencies import library_manager_dependency
 from app.core.logging import log_debug
-from app.models.books import BookWithCopies
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -15,7 +14,7 @@ router = APIRouter()
 
 class CopyInfoResponse(BaseModel):
     id: int
-    status: str
+    book_id: int
     created_at: date
 
 
@@ -28,16 +27,16 @@ class BorrowedCopyInfoResponse(BaseModel):
     borrowed_at: date
     due_date: date
     is_overdue: bool
+    book_title: str
 
     @computed_field
-    @property
     def borrower_full_name(self) -> str:
         return f"{self.borrower_first_name} {self.borrower_last_name}"
 
     @computed_field
-    @property
     def days_until_due(self) -> int:
         from datetime import date
+
         return (self.due_date - date.today()).days
 
 
@@ -46,84 +45,53 @@ class BookWithCopiesResponse(BaseModel):
     title: str
     isbn: Optional[str] = None
     year_published: Optional[int] = None
-    total_copies: int
-    available_copies_count: int
-    borrowed_copies_count: int
     available_copies: List[CopyInfoResponse]
     borrowed_copies: List[BorrowedCopyInfoResponse]
 
     @computed_field
-    @property
-    def is_available(self) -> bool:
-        return self.available_copies_count > 0
+    def total_copies(self) -> int:
+        return len(self.available_copies) + len(self.borrowed_copies)
 
     @computed_field
-    @property
+    def available_copies_count(self) -> int:
+        return len(self.available_copies)
+
+    @computed_field
+    def borrowed_copies_count(self) -> int:
+        return len(self.borrowed_copies)
+
+    @computed_field
+    def is_available(self) -> bool:
+        return len(self.available_copies) > 0
+
+    @computed_field
     def availability_status(self) -> str:
-        if self.available_copies_count == 0:
+        available = len(self.available_copies)
+        total = len(self.available_copies) + len(self.borrowed_copies)
+
+        if available == 0:
             return "Not available"
-        elif self.available_copies_count == self.total_copies:
+        elif available == total:
             return "Fully available"
         else:
-            return f"{self.available_copies_count} of {self.total_copies} available"
+            return f"{available} of {total} available"
 
-
-class BookSummaryResponse(BaseModel):
-    id: int
-    title: str
-    isbn: Optional[str] = None
-    year_published: Optional[int] = None
-    total_copies: int
-    available_copies_count: int
-    borrowed_copies_count: int
-
-    @computed_field
-    @property
-    def is_available(self) -> bool:
-        return self.available_copies_count > 0
-
-
-class BookDetailsResponse(BaseModel):
-    id: int
-    title: str
-    isbn: Optional[str] = None
-    year_published: Optional[int] = None
-    total_copies: int
-    available_copies: int
-
-
-class BorrowedBookResponse(BaseModel):
-    book_id: int
-    book_title: str
-    borrower_first_name: str
-    borrower_last_name: str
-    borrower_email: str
-    borrowed_at: date
-    due_date: date
-    copy_id: int
-    is_overdue: bool
-
-    @computed_field
-    @property
-    def borrower_full_name(self) -> str:
-        return f"{self.borrower_first_name} {self.borrower_last_name}"
-
-    @computed_field
-    @property
-    def days_until_due(self) -> int:
-        from datetime import date
-        return (self.due_date - date.today()).days
 
 class CreateBookRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=255, description="Book title")
     isbn: Optional[str] = Field(None, max_length=13, description="ISBN number")
-    year_published: Optional[int] = Field(None, ge=1000, le=2030, description="Publication year")
-    copies_count: int = Field(..., ge=1, le=50, description="Number of copies to create (1-50)")
+    year_published: Optional[int] = Field(
+        None, ge=1000, le=2030, description="Publication year"
+    )
+    copies_count: int = Field(
+        ..., ge=1, le=50, description="Number of copies to create (1-50)"
+    )
 
 
 class BookCreatedResponse(BaseModel):
     message: str
     book: BookWithCopiesResponse
+
 
 class BorrowingResultResponse(BaseModel):
     borrowing_id: int
@@ -148,73 +116,60 @@ class ReturnResponse(BaseModel):
     return_details: ReturnResultResponse
 
 
-def dataclass_to_pydantic(dataclass_obj, pydantic_model):
-    """Convert dataclass to pydantic model"""
-    return pydantic_model.model_validate(asdict(dataclass_obj))
-
-
-def convert_dataclass_list(dataclass_list, pydantic_model):
-    """Convert list of dataclasses to list of pydantic models"""
-    return [dataclass_to_pydantic(item, pydantic_model) for item in dataclass_list]
-
-
 # API Endpoints
-@router.get("/", response_model=List[Union[BookWithCopiesResponse, BookSummaryResponse]])
+@router.get("/", response_model=List[BookWithCopiesResponse])
 async def get_books(
-        include_details: bool = False,
-        library_manager: LibraryManager = Depends(library_manager_dependency)
+    library_manager: LibraryManager = Depends(library_manager_dependency),
 ):
     """Get all books"""
-    log_debug(logger, f"GET /books endpoint called (include_details={include_details})")
-    books = await library_manager.get_all_books(include_copy_details=include_details)
+    log_debug(logger, "GET /books endpoint called")
+    books = await library_manager.get_all_books()
 
-    if include_details:
-        return convert_dataclass_list(books, BookWithCopiesResponse)
-    else:
-        return convert_dataclass_list(books, BookSummaryResponse)
+    return [BookWithCopiesResponse.model_validate(asdict(book)) for book in books]
 
 
-@router.get("/{book_id}", response_model=Union[BookWithCopiesResponse, BookDetailsResponse])
+@router.get("/{book_id}", response_model=BookWithCopiesResponse)
 async def get_book(
-        book_id: int,
-        library_manager: LibraryManager = Depends(library_manager_dependency)
+    book_id: int, library_manager: LibraryManager = Depends(library_manager_dependency)
 ):
-    """Get book"""
+    """Get book by ID"""
     log_debug(logger, f"GET /books/{book_id} endpoint called")
     book = await library_manager.get_book_details(book_id)
     if not book:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Book with ID {book_id} not found"
+            detail=f"Book with ID {book_id} not found",
         )
-    return dataclass_to_pydantic(book, BookDetailsResponse)
+
+    return BookWithCopiesResponse.model_validate(asdict(book))
 
 
 @router.post("/copies/{copy_id}/borrow", response_model=BorrowResponse)
 async def borrow_copy(
-        copy_id: int,
-        user_id: int,
-        library_manager: LibraryManager = Depends(library_manager_dependency)
+    copy_id: int,
+    x_user_id: int = Header(
+        ..., alias="x-user-Id", description="ID of user borrowing the book"
+    ),
+    library_manager: LibraryManager = Depends(library_manager_dependency),
 ):
     """Borrow a specific copy of a book"""
-    log_debug(logger, f"POST /books/copies/{copy_id}/borrow endpoint called for user {user_id}")
+    log_debug(
+        logger,
+        f"POST /books/copies/{copy_id}/borrow endpoint called for user {x_user_id}",
+    )
     try:
-        result = await library_manager.borrow_copy(copy_id, user_id)
+        result = await library_manager.borrow_copy(copy_id, x_user_id)
         return BorrowResponse(
             message="Copy borrowed successfully",
-            borrowing_details=dataclass_to_pydantic(result, BorrowingResultResponse)
+            borrowing_details=BorrowingResultResponse.model_validate(asdict(result)),
         )
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/copies/{copy_id}/return", response_model=ReturnResponse)
 async def return_book(
-        copy_id: int,
-        library_manager: LibraryManager = Depends(library_manager_dependency)
+    copy_id: int, library_manager: LibraryManager = Depends(library_manager_dependency)
 ):
     """Return a book copy"""
     log_debug(logger, f"POST /books/copies/{copy_id}/return endpoint called")
@@ -222,19 +177,18 @@ async def return_book(
         result = await library_manager.return_book(copy_id)
         return ReturnResponse(
             message="Book returned successfully",
-            return_details=dataclass_to_pydantic(result, ReturnResultResponse)
+            return_details=ReturnResultResponse.model_validate(asdict(result)),
         )
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.post("/", response_model=BookCreatedResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/", response_model=BookCreatedResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_book(
-        book_data: CreateBookRequest,
-        library_manager: LibraryManager = Depends(library_manager_dependency)
+    book_data: CreateBookRequest,
+    library_manager: LibraryManager = Depends(library_manager_dependency),
 ):
     """Create a new book with specified number of copies"""
     log_debug(logger, f"POST /books endpoint called for title: {book_data.title}")
@@ -244,10 +198,7 @@ async def create_book(
 
         return BookCreatedResponse(
             message=f"Book '{created_book.title}' created successfully with {created_book.total_copies} copies",
-            book=dataclass_to_pydantic(created_book, BookWithCopiesResponse)
+            book=BookWithCopiesResponse.model_validate(asdict(created_book)),
         )
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

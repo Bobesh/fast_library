@@ -7,7 +7,7 @@ from datetime import date
 class CopyInfo:
     """Information about a specific copy"""
     id: int
-    status: str
+    book_id: int
     created_at: date
 
 
@@ -36,10 +36,12 @@ class BorrowedCopyInfo:
 
 @dataclass(frozen=True)
 class BaseBook:
+    """Basic info about book"""
     id: int
     title: str
     isbn: Optional[str]
     year_published: Optional[int]
+
 
 @dataclass(frozen=True)
 class BookWithCopies(BaseBook):
@@ -48,63 +50,29 @@ class BookWithCopies(BaseBook):
     borrowed_copies: List[BorrowedCopyInfo]
 
     @property
-    def available_copies_count(self):
+    def total_copies(self) -> int:
+        return len(self.available_copies) + len(self.borrowed_copies)
+
+    @property
+    def available_copies_count(self) -> int:
         return len(self.available_copies)
 
     @property
-    def borrowed_copies_count(self):
+    def borrowed_copies_count(self) -> int:
         return len(self.borrowed_copies)
 
     @property
-    def total_copies(self):
-        return self.borrowed_copies_count + self.available_copies_count
-
-    @property
     def is_available(self) -> bool:
-        """Check if any copy is available for borrowing"""
         return self.available_copies_count > 0
 
     @property
     def availability_status(self) -> str:
-        """Human readable availability status"""
         if self.available_copies_count == 0:
             return "Not available"
         elif self.available_copies_count == self.total_copies:
             return "Fully available"
         else:
             return f"{self.available_copies_count} of {self.total_copies} available"
-
-    @property
-    def overdue_copies(self) -> List[BorrowedCopyInfo]:
-        """Get only overdue borrowed copies"""
-        return [copy for copy in self.borrowed_copies if copy.is_overdue]
-
-
-@dataclass(frozen=True)
-class BookSummary:
-    """Simplified book information without detailed copy lists"""
-    id: int
-    title: str
-    isbn: Optional[str]
-    year_published: Optional[int]
-    total_copies: int
-    available_copies_count: int
-    borrowed_copies_count: int
-
-    @property
-    def is_available(self) -> bool:
-        return self.available_copies_count > 0
-
-
-@dataclass(frozen=True)
-class BookDetails:
-    """Detailed book information"""
-    id: int
-    title: str
-    isbn: Optional[str]
-    year_published: Optional[int]
-    total_copies: int
-    available_copies: int
 
 
 @dataclass(frozen=True)

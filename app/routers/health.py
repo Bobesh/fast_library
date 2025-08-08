@@ -9,7 +9,4 @@ router = APIRouter()
 @router.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return JSONResponse(
-        status_code=status.HTTP_200_OK,
-        content="It is alive!"
-    )
+    return JSONResponse(status_code=status.HTTP_200_OK, content="It is alive!")

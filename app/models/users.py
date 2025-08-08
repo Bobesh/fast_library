@@ -15,4 +15,5 @@ class User:
 
     @property
     def full_name(self) -> str:
+        """Users full name"""
         return f"{self.first_name} {self.last_name}"

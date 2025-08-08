@@ -7,7 +7,6 @@ from app.models.users import User
 
 logger = logging.getLogger(__name__)
 
-# Table names as constants
 USERS_TABLE_NAME = "users"
 
 
@@ -22,17 +21,23 @@ class UserPsql:
             with DatabaseConnection() as conn:
                 with conn:
                     with conn.cursor() as cursor:
-                        cursor.execute(f"""
+                        cursor.execute(
+                            f"""
                             SELECT id, username, email, first_name, last_name, created_at::date
                             FROM {USERS_TABLE_NAME}
                             ORDER BY created_at DESC
-                        """)
+                        """
+                        )
                         rows = cursor.fetchall()
 
                         users = [
                             User(
-                                id=row[0], username=row[1], email=row[2],
-                                first_name=row[3], last_name=row[4], created_at=row[5]
+                                id=row[0],
+                                username=row[1],
+                                email=row[2],
+                                first_name=row[3],
+                                last_name=row[4],
+                                created_at=row[5],
                             )
                             for row in rows
                         ]
@@ -51,16 +56,23 @@ class UserPsql:
             with DatabaseConnection() as conn:
                 with conn:
                     with conn.cursor() as cursor:
-                        cursor.execute(f"""
+                        cursor.execute(
+                            f"""
                             SELECT id, username, email, first_name, last_name, created_at::date
                             FROM {USERS_TABLE_NAME} WHERE id = %s
-                        """, (user_id,))
+                        """,
+                            (user_id,),
+                        )
                         row = cursor.fetchone()
 
                         if row:
                             user = User(
-                                id=row[0], username=row[1], email=row[2],
-                                first_name=row[3], last_name=row[4], created_at=row[5]
+                                id=row[0],
+                                username=row[1],
+                                email=row[2],
+                                first_name=row[3],
+                                last_name=row[4],
+                                created_at=row[5],
                             )
                             log_debug(logger, f"Found user: {user.username}")
                             return user
@@ -78,31 +90,42 @@ class UserPsql:
             with DatabaseConnection() as conn:
                 with conn:
                     with conn.cursor() as cursor:
-                        cursor.execute(f"""
+                        cursor.execute(
+                            f"""
                             INSERT INTO {USERS_TABLE_NAME} (username, email, first_name, last_name)
                             VALUES (%s, %s, %s, %s)
                             RETURNING id, username, email, first_name, last_name, created_at::date
-                        """, (
-                            user_data['username'],
-                            user_data['email'],
-                            user_data['first_name'],
-                            user_data['last_name']
-                        ))
+                        """,
+                            (
+                                user_data["username"],
+                                user_data["email"],
+                                user_data["first_name"],
+                                user_data["last_name"],
+                            ),
+                        )
 
                         row = cursor.fetchone()
                         user = User(
-                            id=row[0], username=row[1], email=row[2],
-                            first_name=row[3], last_name=row[4], created_at=row[5]
+                            id=row[0],
+                            username=row[1],
+                            email=row[2],
+                            first_name=row[3],
+                            last_name=row[4],
+                            created_at=row[5],
                         )
 
-                        log_debug(logger, f"Created user: {user.username} with ID {user.id}")
+                        log_debug(
+                            logger, f"Created user: {user.username} with ID {user.id}"
+                        )
                         return user
 
         except psycopg2.IntegrityError as e:
             error_detail = str(e).lower()
-            if 'ix_users_username' in error_detail or 'username' in error_detail:
-                raise ValueError(f"Username '{user_data.get('username')}' already exists")
-            elif 'ix_users_email' in error_detail or 'email' in error_detail:
+            if "ix_users_username" in error_detail or "username" in error_detail:
+                raise ValueError(
+                    f"Username '{user_data.get('username')}' already exists"
+                )
+            elif "ix_users_email" in error_detail or "email" in error_detail:
                 raise ValueError(f"Email '{user_data.get('email')}' already exists")
             else:
                 raise ValueError(f"User data violates database constraint: {e}")

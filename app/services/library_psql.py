@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union, Tuple
 from datetime import date, timedelta
 
 import psycopg2
@@ -8,7 +8,11 @@ from app.core.database import DatabaseConnection
 from app.core.logging import log_debug, log_error
 from app.models.books import (
     BookWithCopies,
-    BorrowingResult, ReturnResult, CopyInfo, BorrowedCopyInfo, BaseBook
+    BorrowingResult,
+    ReturnResult,
+    CopyInfo,
+    BorrowedCopyInfo,
+    BaseBook,
 )
 
 logger = logging.getLogger(__name__)
@@ -26,7 +30,7 @@ class LibraryPsql:
     def _get_books(cursor, book_id: Optional[int] = None) -> List[BaseBook]:
         """Get books with optional filtering by ID"""
         query = f"SELECT id, title, isbn, year_published FROM {BOOKS_TABLE_NAME}"
-        params = ()
+        params: Union[Tuple[()], Tuple[int]] = ()
 
         if book_id is not None:
             query += " WHERE id = %s"
@@ -36,20 +40,15 @@ class LibraryPsql:
         cursor.execute(query, params)
 
         return [
-            BaseBook(
-                id=row[0],
-                title=row[1],
-                isbn=row[2],
-                year_published=row[3]
-            )
+            BaseBook(id=row[0], title=row[1], isbn=row[2], year_published=row[3])
             for row in cursor.fetchall()
         ]
 
     @staticmethod
     def _get_copies(cursor, book_id: Optional[int] = None) -> Dict[int, List[CopyInfo]]:
         """Get copies with optional filtering by book ID"""
-        query = f"SELECT id, book_id, status, created_at FROM {COPIES_TABLE_NAME}"
-        params = ()
+        query = f"SELECT id, book_id, created_at FROM {COPIES_TABLE_NAME}"
+        params: Union[Tuple[()], Tuple[int]] = ()
 
         if book_id is not None:
             query += " WHERE book_id = %s"
@@ -62,11 +61,7 @@ class LibraryPsql:
 
         rows = cursor.fetchall()
         for row in rows:
-            copy_info = CopyInfo(
-                    id=row[0],
-                    status=row[2],
-                    created_at=row[3]
-                )
+            copy_info = CopyInfo(id=row[0], book_id=row[1], created_at=row[2])
             if row[1] in copy_map.keys():
                 copy_map[row[1]].append(copy_info)
                 continue
@@ -75,7 +70,9 @@ class LibraryPsql:
         return copy_map
 
     @staticmethod
-    def _get_active_borrowings(cursor, book_id: Optional[int] = None) -> Dict[int, List[BorrowedCopyInfo]]:
+    def _get_active_borrowings(
+        cursor, book_id: Optional[int] = None
+    ) -> Dict[int, List[BorrowedCopyInfo]]:
         """Get active borrowings with optional filtering by book ID"""
         query = f"""
                 SELECT c.book_id, b.title, br.copy_id, br.user_id, br.borrowed_at, br.due_date,
@@ -87,7 +84,7 @@ class LibraryPsql:
                 LEFT JOIN {BOOKS_TABLE_NAME} b ON c.book_id = b.id
                 WHERE br.returned_at IS NULL
             """
-        params = ()
+        params: Union[Tuple[()], Tuple[int]] = ()
 
         if book_id is not None:
             query += " AND c.book_id = %s"
@@ -100,16 +97,16 @@ class LibraryPsql:
 
         for row in cursor.fetchall():
             borrowed_copy_info = BorrowedCopyInfo(
-                                    book_title=row[1],
-                                    copy_id=row[2],
-                                    borrower_id=row[3],
-                                    borrowed_at=row[4],
-                                    due_date=row[5],
-                                    borrower_first_name=row[6],
-                                    borrower_last_name=row[7],
-                                    borrower_email=row[8],
-                                    is_overdue=row[9],
-                                )
+                book_title=row[1],
+                copy_id=row[2],
+                borrower_id=row[3],
+                borrowed_at=row[4],
+                due_date=row[5],
+                borrower_first_name=row[6],
+                borrower_last_name=row[7],
+                borrower_email=row[8],
+                is_overdue=row[9],
+            )
             if row[0] in borrow_copy_map.keys():
                 borrow_copy_map[row[1]].append(borrowed_copy_info)
                 continue
@@ -117,23 +114,44 @@ class LibraryPsql:
 
         return borrow_copy_map
 
-
     @staticmethod
-    def _merge_book_data(books: List[BaseBook], copies: Dict[int, List[CopyInfo]], borrowings: Dict[int, List[BorrowedCopyInfo]]) -> List[BookWithCopies]:
+    def _merge_book_data(
+        books: List[BaseBook],
+        copies: Dict[int, List[CopyInfo]],
+        borrowings: Dict[int, List[BorrowedCopyInfo]],
+    ) -> List[BookWithCopies]:
         """Merge books, copies and borrowings data into BookWithCopies objects"""
-        books = [
-            BookWithCopies(
-                id=b.id,
-                title=b.title,
-                isbn=b.isbn,
-                year_published=b.year_published,
-                available_copies=copies.get(b.id, []),
-                borrowed_copies= borrowings.get(b.id, [])
-            )
-            for b in books
-        ]
+        result = []
+        for book in books:
+            all_copies = copies.get(book.id, [])
+            borrowed_copies = borrowings.get(book.id, [])
 
-        return books
+            borrowed_copy_ids = {borrowed.copy_id for borrowed in borrowed_copies}
+
+            available_copies = []
+            for copy in all_copies:
+                if copy.id not in borrowed_copy_ids:
+                    created_at = copy.created_at
+                    if hasattr(created_at, "date"):
+                        created_at = created_at.date()
+
+                    available_copies.append(
+                        CopyInfo(
+                            id=copy.id, book_id=copy.book_id, created_at=created_at
+                        )
+                    )
+
+            book_with_copies = BookWithCopies(
+                id=book.id,
+                title=book.title,
+                isbn=book.isbn,
+                year_published=book.year_published,
+                available_copies=available_copies,
+                borrowed_copies=borrowed_copies,
+            )
+            result.append(book_with_copies)
+
+        return result
 
     async def get_all_books_with_copies(self) -> List[BookWithCopies]:
         """Get all books with copy information - three separate queries in one transaction"""
@@ -168,10 +186,15 @@ class LibraryPsql:
                             return None
 
                         copies = self._get_copies(cursor, book_id=book_id)
-                        borrowings = self._get_active_borrowings(cursor, book_id=book_id)
+                        borrowings = self._get_active_borrowings(
+                            cursor, book_id=book_id
+                        )
                         result = self._merge_book_data(books, copies, borrowings)
 
-                        log_debug(logger, f"Found book: {result[0].title if result else 'None'}")
+                        log_debug(
+                            logger,
+                            f"Found book: {result[0].title if result else 'None'}",
+                        )
                         return result[0] if result else None
 
         except Exception as e:
@@ -186,14 +209,17 @@ class LibraryPsql:
             with DatabaseConnection() as conn:
                 with conn:
                     with conn.cursor() as cursor:
-                        cursor.execute(f"""
+                        cursor.execute(
+                            f"""
                             SELECT c.id, c.book_id,
                                    CASE WHEN br.id IS NOT NULL THEN true ELSE false END as is_borrowed
                             FROM {COPIES_TABLE_NAME} c
                             LEFT JOIN {BORROWINGS_TABLE_NAME} br ON c.id = br.copy_id AND br.returned_at IS NULL
                             WHERE c.id = %s
                             FOR UPDATE OF c
-                        """, (copy_id,))
+                        """,
+                            (copy_id,),
+                        )
                         copy_row = cursor.fetchone()
 
                         if not copy_row:
@@ -204,18 +230,21 @@ class LibraryPsql:
 
                         due_date = date.today() + timedelta(days=30)
 
-                        cursor.execute(f"""
+                        cursor.execute(
+                            f"""
                             INSERT INTO {BORROWINGS_TABLE_NAME} (copy_id, user_id, due_date)
                             VALUES (%s, %s, %s)
                             RETURNING id, borrowed_at
-                        """, (copy_id, user_id, due_date))
+                        """,
+                            (copy_id, user_id, due_date),
+                        )
                         borrowing_row = cursor.fetchone()
 
                         result = BorrowingResult(
                             borrowing_id=borrowing_row[0],
                             copy_id=copy_id,
                             borrowed_at=borrowing_row[1],
-                            due_date=due_date
+                            due_date=due_date,
                         )
 
                         log_debug(logger, f"Successfully borrowed copy {copy_id}")
@@ -234,23 +263,28 @@ class LibraryPsql:
                 with conn:
                     with conn.cursor() as cursor:
                         return_date = date.today()
-                        cursor.execute(f"""
+                        cursor.execute(
+                            f"""
                             UPDATE {BORROWINGS_TABLE_NAME} 
                             SET returned_at = %s 
                             WHERE copy_id = %s AND returned_at IS NULL
                             RETURNING id
-                        """, (return_date, copy_id))
+                        """,
+                            (return_date, copy_id),
+                        )
 
                         borrowing_row = cursor.fetchone()
                         if not borrowing_row:
-                            raise ValueError(f"No active borrowing found for copy {copy_id}")
+                            raise ValueError(
+                                f"No active borrowing found for copy {copy_id}"
+                            )
 
                         borrowing_id = borrowing_row[0]
 
                         result = ReturnResult(
                             borrowing_id=borrowing_id,
                             copy_id=copy_id,
-                            returned_at=return_date
+                            returned_at=return_date,
                         )
 
                         log_debug(logger, f"Successfully returned copy {copy_id}")
@@ -265,35 +299,73 @@ class LibraryPsql:
         try:
             log_debug(logger, f"Creating book: {book_data.get('title')}")
             with DatabaseConnection() as conn:
-                with conn:
+                with conn:  # Transaction
                     with conn.cursor() as cursor:
-                        cursor.execute(f"""
+                        cursor.execute(
+                            f"""
                             INSERT INTO {BOOKS_TABLE_NAME} (title, isbn, year_published)
                             VALUES (%s, %s, %s)
-                            RETURNING id
-                        """, (
-                            book_data['title'],
-                            book_data.get('isbn'),
-                            book_data.get('year_published')
-                        ))
+                            RETURNING *
+                        """,
+                            (
+                                book_data["title"],
+                                book_data.get("isbn"),
+                                book_data.get("year_published"),
+                            ),
+                        )
 
-                        book_id = cursor.fetchone()[0]
+                        book_row = cursor.fetchone()
 
-                        copies_count = book_data['copies_count']
-                        copy_values = [(book_id,) for _ in range(copies_count)]
+                        book_id = book_row[0]
+                        copies_count = book_data["copies_count"]
 
-                        cursor.executemany(f"""
+                        cursor.execute(
+                            f"""
                             INSERT INTO {COPIES_TABLE_NAME} (book_id)
-                            VALUES (%s)
-                        """, copy_values)
+                            SELECT %s FROM generate_series(1, %s)
+                            RETURNING id, created_at::date
+                        """,
+                            (book_id, copies_count),
+                        )
 
-                        log_debug(logger, f"Created book '{book_data['title']}' with {copies_count} copies")
+                        copy_rows = cursor.fetchall()
 
-                        return await self.get_book_by_id(book_id)
+                        available_copies = [
+                            CopyInfo(id=row[0], book_id=book_id, created_at=row[1])
+                            for row in copy_rows
+                        ]
+
+                        book_with_copies = BookWithCopies(
+                            id=book_row[0],
+                            title=book_row[1],
+                            isbn=book_row[2],
+                            year_published=book_row[3],
+                            available_copies=available_copies,
+                            borrowed_copies=[],  # New book has no borrowed copies
+                        )
+
+                        log_debug(
+                            logger,
+                            f"Created book '{book_with_copies.title}' with {len(available_copies)} copies",
+                        )
+                        return book_with_copies
 
         except psycopg2.IntegrityError as e:
-            if 'unique_isbn' in str(e):
-                raise ValueError(f"Book with ISBN '{book_data.get('isbn')}' already exists")
+            if "unique_isbn" in str(e):
+                raise ValueError(
+                    f"Book with ISBN '{book_data.get('isbn')}' already exists"
+                )
+            else:
+                raise ValueError(f"Database constraint violation: {e}")
+        except Exception as e:
+            log_error(logger, f"Failed to create book: {e}", exc_info=e)
+            raise
+
+        except psycopg2.IntegrityError as e:
+            if "unique_isbn" in str(e):
+                raise ValueError(
+                    f"Book with ISBN '{book_data.get('isbn')}' already exists"
+                )
             else:
                 raise ValueError(f"Database constraint violation: {e}")
         except Exception as e:

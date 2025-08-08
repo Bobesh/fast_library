@@ -1,6 +1,29 @@
 version: '3.8'
 
 services:
+  fastapi-app:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: library
+      DB_USER: library
+      DB_PASSWORD: secret123
+
+      APP_NAME: "Fast Library API"
+      APP_VERSION: "1.0.0"
+      APP_HOST: "0.0.0.0"
+      APP_PORT: 8000
+
+      API_KEY: "dev-api-key-123"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - app-network
+
   db:
     image: postgres:15
     environment:
@@ -21,6 +44,12 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - app-network
 
 volumes:
   postgres_data:
+
+networks:
+  app-network:
+    driver: bridge

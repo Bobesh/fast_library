@@ -1,0 +1,60 @@
+### Configuration
+@api_key = supersecretapikey
+@base_url = http://localhost:8000
+
+### Health Check (no API key needed)
+GET {{base_url}}/health
+
+### Get all books with full details
+GET {{base_url}}/api/books/
+X-API-Key: {{api_key}}
+
+### Get specific book by ID
+GET {{base_url}}/api/books/1
+X-API-Key: {{api_key}}
+
+### Create new book with copies
+POST {{base_url}}/api/books/
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "title": "The Hobbit",
+  "isbn": "9780547928227",
+  "year_published": 1937,
+  "copies_count": 2
+}
+
+### Borrow a copy (copy_id=2, user_id=1 in header)
+POST {{base_url}}/api/books/copies/2/borrow
+X-API-Key: {{api_key}}
+X-User-Id: 1
+
+### Return a copy (copy_id=1)
+POST {{base_url}}/api/books/copies/1/return
+X-API-Key: {{api_key}}
+
+###
+### USERS ENDPOINTS
+###
+
+### Get all users
+GET {{base_url}}/api/users/
+X-API-Key: {{api_key}}
+
+### Get specific user by ID
+GET {{base_url}}/api/users/1
+X-API-Key: {{api_key}}
+
+### Create new user
+POST {{base_url}}/api/users/
+X-API-Key: {{api_key}}
+Content-Type: application/json
+
+{
+  "username": "john_doe",
+  "email": "john.doe@example.com",
+  "first_name": "John",
+  "last_name": "Doe"
+}
+

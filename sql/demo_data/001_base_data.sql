@@ -12,11 +12,12 @@ INSERT INTO copies (book_id) VALUES
     (4), (4), (4),  -- 3 copies of Pride and Prejudice
     (5), (5);       -- 2 copies of Catcher
 
-INSERT INTO users (username, email, first_name, last_name, phone) VALUES
-    ('alice_wonder', 'alice@demo.com', 'Alice', 'Wonderland', '+420111222333'),
-    ('bob_builder', 'bob@demo.com', 'Bob', 'Builder', '+420444555666'),
-    ('charlie_chocolate', 'charlie@demo.com', 'Charlie', 'Chocolate', NULL),
-    ('diana_prince', 'diana@demo.com', 'Diana', 'Prince', '+420777888999');
+INSERT INTO users (username, email, first_name, last_name) VALUES
+    ('alice_wonder', 'alice@demo.com', 'Alice', 'Wonderland'),
+    ('bob_builder', 'bob@demo.com', 'Bob', 'Builder'),
+    ('charlie_chocolate', 'charlie@demo.com', 'Charlie', 'Chocolate'),
+    ('diana_prince', 'diana@demo.com', 'Diana', 'Prince'),
+    ('eve_online', 'eve@demo.com', 'Eve', 'Online');
 
 INSERT INTO borrowings (copy_id, user_id, due_date) VALUES
     (1, 1, CURRENT_DATE + INTERVAL '25 days'), -- Alice borrowed Gatsby

@@ -1,5 +1,3 @@
-import asyncio
-import json
 import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
@@ -45,10 +43,10 @@ app = FastAPI(
 
 log_info(
     logger,
-    f"Starting {settings.app_name} version {settings.version} on {settings.app_host()}:{settings.app_port()}"
+    f"Starting {settings.app_name} version {settings.version} on {settings.app_host()}:{settings.app_port()}",
 )
 
-#include middlewares
+# include middlewares
 app.add_middleware(APIKeyMiddleware)
 
 # Include routers
@@ -58,13 +56,15 @@ app.include_router(users.router, prefix="/api/users", tags=["users"])
 
 
 @app.exception_handler(HTTPException)
-async def custom_http_exception_handler(request: Request, ex: HTTPException) -> JSONResponse:
+async def custom_http_exception_handler(
+    request: Request, ex: HTTPException
+) -> JSONResponse:
     log_warning(
         logger,
         f"HTTP exception: {ex.status_code} - {ex.detail}",
         status_code=ex.status_code,
         path=str(request.url.path),
-        method=request.method
+        method=request.method,
     )
 
     message = f"HTTP {ex.status_code}: {ex.detail}"
@@ -73,7 +73,7 @@ async def custom_http_exception_handler(request: Request, ex: HTTPException) -> 
 
     return JSONResponse(
         status_code=ex.status_code,
-        content={"message": message, "status_code": ex.status_code}
+        content={"message": message, "status_code": ex.status_code},
     )
 
 
@@ -84,7 +84,7 @@ async def general_exception_handler(request: Request, ex: Exception) -> JSONResp
         f"Unhandled exception occurred: {type(ex).__name__}",
         exc_info=ex,
         path=str(request.url.path),
-        method=request.method
+        method=request.method,
     )
 
     return JSONResponse(
@@ -92,8 +92,8 @@ async def general_exception_handler(request: Request, ex: Exception) -> JSONResp
         content={
             "message": f"Internal server error: {type(ex).__name__}",
             "status_code": status.HTTP_500_INTERNAL_SERVER_ERROR,
-            "path": str(request.url.path)
-        }
+            "path": str(request.url.path),
+        },
     )
 
 
